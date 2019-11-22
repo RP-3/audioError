@@ -4,21 +4,22 @@
     class ViewController: UIViewController {
         @IBOutlet weak var playPauseButton: UIButton!
         @IBAction func playPauseButtonTap(_ sender: Any) {
-            if self.audioPlayer.isPlaying {
+            if self.audioPlayer.rate != 0.0 {
                 pause()
             } else {
                 play()
             }
         }
 
-        private var audioPlayer: AVAudioPlayer!
+        private var audioPlayer: AVPlayer!
         private var hasPlayed = false
 
         override func viewDidLoad() {
             super.viewDidLoad()
 
             let fileUrl = Bundle.main.url(forResource: "temp/intro", withExtension: ".mp3")
-            try! self.audioPlayer = AVAudioPlayer(contentsOf: fileUrl!)
+            let item = AVPlayerItem(url: fileUrl!)
+            self.audioPlayer = AVPlayer(playerItem: item)
             let audioSession = AVAudioSession.sharedInstance()
             do { // play on speakers if headphones not plugged in
                 try audioSession.overrideOutputAudioPort(AVAudioSession.PortOverride.speaker)
@@ -52,22 +53,17 @@
         @objc private func handlePlay(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
             print(".......................")
             print(self.audioPlayer.currentTime)
-            let address = Unmanaged.passUnretained(self.audioPlayer).toOpaque()
-            print("\(address) not playing: \(!self.audioPlayer.isPlaying)")
-            guard !self.audioPlayer.isPlaying else { return .commandFailed }
+            guard self.audioPlayer?.rate == 0.0 else { return .commandFailed }
             print("attempting to play")
-            let success = self.audioPlayer.play()
-            print("play() invoked with success \(success)")
-            print("now playing \(self.audioPlayer.isPlaying)")
-            return success ? .success : .commandFailed
+            self.audioPlayer.play()
+            print("play() invoked")
+            return .success
         }
 
         @objc private func handlePause(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
             print(".......................")
             print(self.audioPlayer.currentTime)
-            let address = Unmanaged.passUnretained(self.audioPlayer).toOpaque()
-            print("\(address) playing: \(self.audioPlayer.isPlaying)")
-            guard self.audioPlayer.isPlaying else { return .commandFailed }
+            guard self.audioPlayer.rate != 0.0 else { return .commandFailed }
             print("attempting to pause")
             self.pause()
             print("pause() invoked")
@@ -78,12 +74,13 @@
             let commandCenter = MPRemoteCommandCenter.shared()
             commandCenter.playCommand.addTarget(self, action: #selector(self.handlePlay))
             commandCenter.pauseCommand.addTarget(self, action: #selector(self.handlePause))
-
             var nowPlayingInfo = [String : Any]()
             nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = "Major title"
             nowPlayingInfo[MPMediaItemPropertyTitle] = "Minor Title"
             nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = self.audioPlayer.currentTime
-            nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = self.audioPlayer.duration
+            if let duration = audioPlayer.currentItem?.asset.duration {
+                nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = CMTimeGetSeconds(duration)
+            }
             nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = self.audioPlayer.rate
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
         }
